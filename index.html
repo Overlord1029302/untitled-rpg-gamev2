@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quest for the Lost Treasure</title>
+    <style>
+        body {
+            font-family: 'Verdana', sans-serif;
+            background: url('images/background.jpg') no-repeat center center fixed;
+            background-size: cover;
+            color: #FFF;
+            padding: 20px;
+            text-align: center;
+        }
+
+        #game {
+            background: rgba(30, 30, 30, 0.8);
+            border: 2px solid #FFD700;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 600px;
+            margin: auto;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.7);
+        }
+
+        h1 {
+            font-size: 2.8em;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        #stats {
+            margin: 20px 0;
+            font-size: 1.2em;
+        }
+
+        .health-bar {
+            background-color: #444;
+            border-radius: 5px;
+            width: 100%;
+            height: 20px;
+            margin: 10px 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .health-fill {
+            background-color: #76c7c0;
+            height: 100%;
+            border-radius: 5px;
+            transition: width 0.5s;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin: 10px;
+            border: none;
+            font-weight: bold;
+            font-size: 1em;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: #FFD700;
+            color: #2a2a2a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        button:hover {
+            background-color: #FFC107;
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        #storyline {
+            margin-bottom: 20px;
+            font-size: 1.15em;
+            line-height: 1.4;
+        }
+
+        #shop {
+            display: none;
+            margin-top: 20px;
+            font-size: 1.1em;
+            text-align: left;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        #inventory {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .inventory-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game">
+    <h1>Quest for the Lost Treasure</h1>
+    
+    <div id="storyline">
+        <p>Welcome, brave adventurer! You are on a quest to find the legendary Lost Treasure hidden deep within the enchanted forest. Defeat monsters, heal your wounds, and spend your hard-earned coins wisely on items that might help you in your journey!</p>
+    </div>
+    
+    <div id="stats">
+        <p>Level: <span id="level">1</span> (XP: <span id="experience">0</span>/100)</p>
+        <p>Currency: <span id="currency">0</span> Gold Coins</p>
+        <p>Your Attack Strength: <span id="attack">10</span></p>
+        <div class="health-bar">
+            <div class="health-fill" id="healthFill" style="width: 100%;"></div>
+        </div>
+        <p>Health: <span id="health">100</span> / <span id="maxHealth">100</span></p>
+    </div>
+    
+    <p id="message"></p>
+    
+    <button id="attackButton" onclick="attackMonster()">Attack Monster</button>
+    <button onclick="heal()">Heal</button>
+    <button onclick="visitShop()">Visit Shop</button>
+    <button onclick="explore()">Explore the Forest</button>
+    <button id="spellButton" style="display:none;" onclick="castSpell()">Cast Spell</button>
+
+    <div id="shop">
+        <h2>Shop Items</h2>
+        <ul id="shop-items"></ul>
+        <button onclick="closeShop()">Close Shop</button>
+    </div>
+
+    <div id="inventory">
+        <h2>Inventory:</h2>
+        <ul id="inventory-list"></ul>
+    </div>
+</div>
+
+<script>
+    let health = 100;
+    let maxHealth = 100;
+    let currency = 0;
+    let baseAttackStrength = 10;
+    let level = 1;
+    let experience = 0;
+    let currentEnemy = null;
+    let isEnemyDefeated = false;
+    let inventory = [];
+    let purchasedItems = new Set();
+
+    const shopItems = [
+        { name: "Health Potion", cost: 15, maxPurchasable: Infinity},
+        { name: "Strength Elixir", cost: 20, attackIncrease: 5 },
+        { name: "Magic Shield", cost: 30, defenseDuration: 1 },
+        { name: "Fireball Spell", cost: 50, spellBaseDamage: 20 },
+        { name: "Ice Blast Spell", cost: 75, spellBaseDamage: 20 }
+    ];
+
+    const normalEnemies = [
+        { name: "Goblin", baseHealth: 20, baseAttack: 10 },
+        { name: "Orc", baseHealth: 40, baseAttack: 15 },
+        { name: "Dragon", baseHealth: 100, baseAttack: 25 }
+    ];
+
+    const bosses = [
+        { name: "Dark Sorcerer", baseHealth: 250, attack: 35 },
+        { name: "Giant Beast", baseHealth: 500, attack: 50 },
+        { name: "Eternal Warlord", baseHealth: 750, attack: 60 }
+    ];
+
+    function startNewBattle() {
+        currentEnemy = isBossLevel() ? getBoss() : getRandomEnemy();
+        document.getElementById("message").innerText = `A wild ${currentEnemy.name} appears! Prepare to fight!`;
+        isEnemyDefeated = false;
+        updateStats();
+    }
+
+    function isBossLevel() {
+        return level % 10 === 0;
+    }
+
+    function getBoss() {
+        const bossIndex = (level / 10) - 1;
+        return { name: bosses[bossIndex].name, health: bosses[bossIndex].baseHealth + (level * 50), attack: bosses[bossIndex].attack };
+    }
+
+    function getRandomEnemy() {
+        const randomIndex = Math.floor(Math.random() * normalEnemies.length);
+        const enemy = { ...normalEnemies[randomIndex] };
+        enemy.health = enemy.baseHealth + (level * 10);
+        return enemy;
+    }
+
+    function calculateAttackStrength() {
+        return Math.floor(Math.random() * 20) + 1 + (level * 2);
+    }
+
+    function calculateSpellDamage() {
+        return 20 + (level * 2);
+    }
+
+    function attackMonster() {
+        if (health > 0 && currentEnemy !== null) {
+            if (isEnemyDefeated) {
+                startNewBattle();
+                return;
+            }
+
+            const damageDealt = calculateAttackStrength();
+            currentEnemy.health -= damageDealt;
+
+            if (currentEnemy.health <= 0) {
+                currency += 10;
+                experience += isBossLevel() ? 100 : 50;
+
+                document.getElementById("message").innerText = `You defeated the ${currentEnemy.name}! You earned ${isBossLevel() ? 100 : 10} coins and ${isBossLevel() ? 100 : 50} XP!`;
+                isEnemyDefeated = true;
+
+                checkLevelUp();
+
+            } else {
+                document.getElementById("message").innerText = `You dealt ${damageDealt} damage to the ${currentEnemy.name}. It has ${currentEnemy.health} health left.`; 
+                enemyAttack();
+            }
+        }
+    }
+
+    function enemyAttack() {
+        if (currentEnemy && health > 0) {
+            const enemyAttackStrength = currentEnemy.attack || (currentEnemy.baseAttack + (level * 2));
+            const magicShield = inventory.find(i => i.name === "Magic Shield" && i.equipped);
+            if (magicShield && Math.random() < 0.25) {
+                document.getElementById("message").innerText += ` The Magic Shield absorbed the attack! No damage taken!`;
+                return;
+            }
+
+            health -= enemyAttackStrength;
+            updateHealthStatus();
+            if (health > 0) {
+                document.getElementById("message").innerText += ` The ${currentEnemy.name} attacks you for ${enemyAttackStrength} damage!`;
+            }
+        }
+    }
+    
+    function updateHealthStatus() {
+        const healthFill = document.getElementById("healthFill");
+        document.getElementById("health").innerText = health > 0 ? health : 0;
+        document.getElementById("maxHealth").innerText = maxHealth;
+        healthFill.style.width = (health > 0 ? (health / maxHealth) * 100 : 0) + '%';
+
+        if (health <= 0) {
+            document.getElementById("message").innerText = "You have been defeated! Game Over.";
+            disableButtons();
+        }
+    }
+
+    function heal() {
+        if (health < maxHealth) {
+            health += 20;
+            if (health > maxHealth) health = maxHealth;
+            document.getElementById("message").innerText = `You healed 20 health points. Your health is now ${health}/${maxHealth}.`;
+            updateHealthStatus();
+        } else {
+            document.getElementById("message").innerText = "Your health is already full!";
+        }
+    }
+
+    function visitShop() {
+        document.getElementById("shop").style.display = 'block';
+        displayShopItems();
+    }
+
+    function displayShopItems() {
+        const shopItemList = document.getElementById("shop-items");
+        shopItemList.innerHTML = '';
+        shopItems.forEach((item, index) => {
+            const listItem = document.createElement('li');
+            listItem.textContent = `${item.name} - ${item.cost} Gold Coins`;
+            const buyButton = document.createElement('button');
+            buyButton.textContent = 'Buy';
+            buyButton.onclick = () => buyItem(index);
+            listItem.appendChild(buyButton);
+            shopItemList.appendChild(listItem);
+        });
+    }
+
+    function buyItem(index) {
+        const item = shopItems[index];
+        if (currency >= item.cost) {
+            currency -= item.cost;
+
+            if (item.name === "Health Potion" || item.name === "Strength Elixir") {
+                const existingItem = inventory.find(i => i.name === item.name);
+                if (existingItem) {
+                    existingItem.quantity += 1;
+                } else {
+                    inventory.push({ name: item.name, quantity: 1 });
+                }
+            } else if (item.name === "Magic Shield") {
+                const existingShield = inventory.find(i => i.name === "Magic Shield");
+                if (!existingShield) {
+                    inventory.push({ name: item.name, quantity: 1, equipped: false });
+                } else {
+                    document.getElementById("message").innerText = `You already own a Magic Shield and cannot buy another!`;
+                    return;
+                }
+            } else if (item.name === "Fireball Spell" || item.name === "Ice Blast Spell") {
+                const existingSpell = inventory.find(i => i.name === item.name);
+                if (!existingSpell) {
+                    inventory.push(item);
+                } else {
+                    document.getElementById("message").innerText = `You already own a ${item.name}! You can cast it infinitely.`;
+                }
+            } else {
+                purchasedItems.add(item.name);
+                handleOtherPurchases(item);
+            }
+
+            document.getElementById("message").innerText = `You bought a ${item.name}!`;
+            updateStats();
+        } else {
+            document.getElementById("message").innerText = `Not enough coins to buy ${item.name} (requires ${item.cost} coins)!`;
+        }
+    }
+
+    function handleOtherPurchases(item) {
+        if (item.attackIncrease) {
+            baseAttackStrength += item.attackIncrease;
+            document.getElementById("message").innerText += ` Your attack strength increased by ${item.attackIncrease}.`;
+        } else if (item.spellBaseDamage) {
+            inventory.push(`${item.name} (${calculateSpellDamage() + level * 2} damage spell)`);
+            document.getElementById("message").innerText += ` You added it to your inventory.`;
+        }
+    }
+
+    function closeShop() {
+        document.getElementById("shop").style.display = 'none';
+    }
+
+    function explore() {
+        const outcome = Math.random();
+        if (outcome < 0.5) {
+            document.getElementById("message").innerText = "You found a hidden stash of coins! You gained 5 coins.";
+            currency += 5;
+        } else {
+            document.getElementById("message").innerText = "You stumbled into a trap! You lost 10 health.";
+            health -= 10;
+            if (health < 0) health = 0;
+            updateHealthStatus();
+        }
+        updateStats();
+    }
+
+    function castSpell() {
+        if (inventory.length > 0) {
+            const spellItem = inventory.find(item => item.name === "Fireball Spell" || item.name === "Ice Blast Spell");
+            if (spellItem) {
+                if (isEnemyDefeated) {
+                    startNewBattle();
+                    return;
+                }
+                const spellDamage = calculateSpellDamage();
+                currentEnemy.health -= spellDamage;
+                document.getElementById("message").innerText = `You cast ${spellItem.name} and dealt ${spellDamage} damage! ${currentEnemy.name} has ${currentEnemy.health} health left.`;
+                if (currentEnemy.health <= 0) {
+                    currency += 10;
+                    experience += 100;
+                    document.getElementById("message").innerText += ` You defeated the ${currentEnemy.name}! You earned 10 coins and 100 XP!`;
+                    isEnemyDefeated = true;
+                    checkLevelUp();
+                } else {
+                    enemyAttack();
+                }
+            } else {
+                document.getElementById("message").innerText = "You have no spells to cast!";
+            }
+        } else {
+            document.getElementById("message").innerText = "Your inventory is empty!";
+        }
+    }
+
+    function checkLevelUp() {
+        if (experience >= 100) {
+            level += 1;
+            baseAttackStrength += 5;
+            maxHealth += 10;
+            health = maxHealth;
+            experience -= 100;
+            document.getElementById("message").innerText += ` You leveled up to level ${level}! Your attack strength has increased and your max health is now ${maxHealth}.`;
+        }
+        updateHealthStatus();
+    }
+
+    function updateStats() {
+        document.getElementById("currency").innerText = currency;
+        document.getElementById("attack").innerText = baseAttackStrength + (level * 2);
+        document.getElementById("experience").innerText = experience;
+        document.getElementById("level").innerText = level;
+
+        if (health <= 0) {
+            document.getElementById("message").innerText = "You have been defeated! Game Over.";
+            disableButtons();
+        }
+
+        updateInventory();
+    }
+
+    function updateInventory() {
+        const inventoryList = document.getElementById("inventory-list");
+        inventoryList.innerHTML = '';
+        inventory.forEach((item) => {
+            const listItem = document.createElement('li');
+            listItem.className = 'inventory-item';
+            listItem.textContent = item.name;
+
+            if (item.name === "Health Potion") {
+                const useButton = document.createElement('button');
+                useButton.innerText = "Use";
+                useButton.onclick = useHealthPotion;
+                listItem.appendChild(useButton);
+            } else if (item.name === "Strength Elixir") {
+                const useButton = document.createElement('button');
+                useButton.innerText = "Use";
+                useButton.onclick = useStrengthElixir;
+                listItem.appendChild(useButton);
+            } else if (item.name === "Magic Shield") {
+                const equipButton = document.createElement('button');
+                equipButton.innerText = item.equipped ? "Equipped" : "Equip";
+                equipButton.onclick = () => equipMagicShield(item, equipButton);
+                listItem.appendChild(equipButton);
+            } else if (item.name === "Fireball Spell" || item.name === "Ice Blast Spell") {
+                const castButton = document.createElement('button');
+                castButton.innerText = `Cast ${item.name}`;
+                castButton.onclick = castSpell;
+                listItem.appendChild(castButton);
+            }
+
+            inventoryList.appendChild(listItem);
+        });
+
+        document.getElementById("spellButton").style.display = inventory.some(item => item.name.includes("damage spell")) ? 'inline' : 'none';
+    }
+
+    function useHealthPotion() {
+        const potionIndex = inventory.findIndex(i => i.name === "Health Potion");
+        if (potionIndex !== -1) {
+            health = maxHealth;
+            inventory[potionIndex].quantity -= 1;
+            
+            if (inventory[potionIndex].quantity <= 0) {
+                inventory.splice(potionIndex, 1);
+            }
+            
+            document.getElementById("message").innerText = `You used a Health Potion. Your health is now ${health}/${maxHealth}.`;
+
+            updateHealthStatus();
+            updateInventory();
+        } else {
+            document.getElementById("message").innerText = "You have no Health Potions to use!";
+        }
+    }
+
+    function useStrengthElixir() {
+        const elixirIndex = inventory.findIndex(i => i.name === "Strength Elixir");
+        if (elixirIndex !== -1) {
+            baseAttackStrength += 10;
+            inventory[elixirIndex].quantity -= 1;
+
+            if (inventory[elixirIndex].quantity <= 0) {
+                inventory.splice(elixirIndex, 1);
+            }
+
+            document.getElementById("message").innerText = `You used a Strength Elixir. Your strength is now ${baseAttackStrength}.`;
+
+            updateStats();
+            updateInventory();
+        } else {
+            document.getElementById("message").innerText = "You have no Strength Elixirs to use!";
+        }
+    }
+    
+    function equipMagicShield(item, button) {
+        if (!item.equipped) {
+            item.equipped = true;
+            button.innerText = "Equipped";
+            document.getElementById("message").innerText = `You equipped the Magic Shield! It has a 25% chance to negate damage.`;
+        } else {
+            document.getElementById("message").innerText = `You already have the Magic Shield equipped!`;
+        }
+    }
+    startNewBattle();
+</script>
+
+</body>
+</html>
